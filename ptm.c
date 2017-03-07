@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <pcap/pcap.h>
 
-//NEEDED PCAP CALLS (30 funcs from like 69)
+//NEEDED PCAP CALLS (28 funcs from like 69) (libtrace_t *trace, libtrace_filter_t *filter)
+// - #5
+
 /*
 1. pcap_findalldevs( &alldevs, errbuf ) == -1 )			- get a list of capture devices
 2. pcap_freealldevs( alldevs );					- free that list
@@ -13,22 +15,22 @@
 4. pcap_datalink_val_to_name( datalink )			- translates a link-layer header type value(from func above) to the corresponding char name
 5. pcap_datalink_val_to_description( datalink )			- translates header type to desc
 
-6. pcap_close( descr );						- close a capture device or savefile
+# 6. pcap_close( descr );						- close a capture device or savefile	- # trace_destroy() ?
 7. pcap_open_offline( fileName, errbuf )			- open a saved capture file for reading
-8. descr = pcap_create( devOpts.devName, errbuf )		- create a live capture handle
+# 8. descr = pcap_create( devOpts.devName, errbuf )		- create a live capture handle 		- # trace_create() ?
 
 9. pcap_set_snaplen( descr, devOpts.snaplen) )			- set the snapshot length for a not-yet-activated capture handle
 10. pcap_set_buffer_size( descr, devOpts.recvBufSize )		- set the buffer size for a not-yet-activated capture handle
 11. pcap_set_promisc( descr, permisc )				- set promiscuous mode for a not-yet-activated capture handle
 12. pcap_set_timeout( descr, 1 )				- sets the read timeout that will be used on a capture handle
 
-13. pcap_activate( descr )					- start capturing
+# 13. pcap_activate( descr )					- start capturing			- # trace_start()
 
 14. snaplen = pcap_snapshot( descr )				- returns  the  snapshot  length
 15. pcapFd = pcap_fileno( descr )				- returns the file descriptor  from  which  captured packets are read
-16. pcap_setnonblock( descr, 0, errbuf )			- puts  a  capture  handle into ``non-blocking'' mode
+16. pcap_setnonblock( descr, 0, errbuf )	 (libtrace_t *trace, libtrace_filter_t *filter)		- puts  a  capture  handle into ``non-blocking'' mode
 17. ret = pcap_dispatch( descr, msgCnt , pcap_callback,(Rai_u8 *) this ); - process packets from a live capture or savefile
-18. err = pcap_geterr( descr );					- get libpcap error message text
+# 18. err = pcap_geterr( descr );					- get libpcap error message text	- # trace_get_err()
 19. pcap_inject( descr, buff, len );				- send packet
 20. pcap_breakloop( descr );					- force a pcap_dispatch() or pcap_loop() call to return
 
@@ -39,7 +41,7 @@
 24. pcap_lookupnet(devOpts.device(), &netp, &maskp, errbuf)		- find the IPv4 network number and netmask for a device
 
 25. pcap_compile( descr, &fp, ( char * ) pcapFilter, 1, maskp ) 	- compile a filter expression
-26. pcap_setfilter( descr, &fp)					- set the filter
+# 26. pcap_setfilter( descr, &fp)					- set the filter			- # trace_set_filter()
 27. pcap_freecode( &fp );						- free  up  allocated  memory by pcap_compile
 
 28. void pcap_callback(Rai_u8 * args, const struct pcap_pkthdr * pkthdr,const Rai_u8 * packet );	- callback for pcap_loop() or pcap_dispatch()
