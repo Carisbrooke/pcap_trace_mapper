@@ -1,4 +1,5 @@
-//gcc ptm.c -o ptm -lpcap
+//gcc ptm.c -o ptm -lpcap		- build with orig lpcap
+//gcc ptm.c -o ptm -L./ -lpcap		- build with fake lpcap
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -94,6 +95,7 @@ void main()
 	const u_char *packet;		/* The actual packet */
 
 	//1. looking for first available device
+#if 0
 	dev = pcap_lookupdev(errbuf);
 	if (!dev) 
 	{
@@ -102,6 +104,7 @@ void main()
 	}
 	else
 		printf("device for capturing found is: %s\n", dev);	//on my pc its eth0 (probably first one)
+#endif
 
 	printf("start capture from iface: %s\n", iface);
 	pcap_t *pcap = pcap_create(iface, errbuf);
