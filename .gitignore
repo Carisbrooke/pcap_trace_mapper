@@ -1,3 +1,5 @@
 *.o
 *.sw?
 ptm
+Session.vim
+*.so
