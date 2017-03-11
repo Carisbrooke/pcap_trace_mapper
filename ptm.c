@@ -9,23 +9,23 @@
 // - #5
 
 /*
-1. pcap_findalldevs( &alldevs, errbuf ) == -1 )			- get a list of capture devices
-2. pcap_freealldevs( alldevs );					- free that list
+X  1. pcap_findalldevs( &alldevs, errbuf ) == -1 )			- get a list of capture devices
+\/ 2. pcap_freealldevs( alldevs );					- free that list
 
-3. pcap_datalink( descr );					- get the link-layer header type (like ethernet etc)
+\/ 3. pcap_datalink( descr );					- get the link-layer header type (like ethernet etc)
 4. pcap_datalink_val_to_name( datalink )			- translates a link-layer header type value(from func above) to the corresponding char name
 5. pcap_datalink_val_to_description( datalink )			- translates header type to desc
 
 # 6. pcap_close( descr );						- close a capture device or savefile	- # trace_destroy() ?
 7. pcap_open_offline( fileName, errbuf )			- open a saved capture file for reading
-# 8. descr = pcap_create( devOpts.devName, errbuf )		- create a live capture handle 		- # trace_create() ?
+\/ # 8. descr = pcap_create( devOpts.devName, errbuf )		- create a live capture handle 		- # trace_create() ?
 
 9. pcap_set_snaplen( descr, devOpts.snaplen) )			- set the snapshot length for a not-yet-activated capture handle
 10. pcap_set_buffer_size( descr, devOpts.recvBufSize )		- set the buffer size for a not-yet-activated capture handle
 11. pcap_set_promisc( descr, permisc )				- set promiscuous mode for a not-yet-activated capture handle
 12. pcap_set_timeout( descr, 1 )				- sets the read timeout that will be used on a capture handle
 
-# 13. pcap_activate( descr )					- start capturing			- # trace_start()
+\/ # 13. pcap_activate( descr )					- start capturing			- # trace_start()
 
 14. snaplen = pcap_snapshot( descr )				- returns  the  snapshot  length
 15. pcapFd = pcap_fileno( descr )				- returns the file descriptor  from  which  captured packets are read
@@ -48,6 +48,7 @@
 28. void pcap_callback(Rai_u8 * args, const struct pcap_pkthdr * pkthdr,const Rai_u8 * packet );	- callback for pcap_loop() or pcap_dispatch()
 */
 
+//# pcap_next() - trace_read_packet()
 
 
 //NEED TO IMPLEMENT IN API:
