@@ -13,10 +13,10 @@ X  1. pcap_findalldevs( &alldevs, errbuf ) == -1 )			- get a list of capture dev
 \/ 2. pcap_freealldevs( alldevs );					- free that list
 
 \/ 3. pcap_datalink( descr );					- get the link-layer header type (like ethernet etc)
-4. pcap_datalink_val_to_name( datalink )			- translates a link-layer header type value(from func above) to the corresponding char name
-5. pcap_datalink_val_to_description( datalink )			- translates header type to desc
+\/ 4. pcap_datalink_val_to_name( datalink )			- translates a link-layer header type value(from func above) to the corresponding char name
+\/ 5. pcap_datalink_val_to_description( datalink )			- translates header type to desc
 
-# 6. pcap_close( descr );						- close a capture device or savefile	- # trace_destroy() ?
+\/ 6. pcap_close( descr );						- close a capture device or savefile	- # trace_destroy() ?
 7. pcap_open_offline( fileName, errbuf )			- open a saved capture file for reading
 \/ # 8. descr = pcap_create( devOpts.devName, errbuf )		- create a live capture handle 		- # trace_create() ?
 
