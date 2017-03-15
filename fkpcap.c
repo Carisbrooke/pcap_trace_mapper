@@ -5,7 +5,8 @@
 #include "dlt.h"
 #include <libtrace.h>
 
-#define LINKTYPE_ETHERNET 1
+#define LINKTYPE_ETHERNET 	1
+#define MAXIMUM_SNAPLEN		262144
 
 #if 0
 int pcap_findalldevs(pcap_if_t **alldevsp, char *errbuf)	- just stub
@@ -20,6 +21,7 @@ struct pcap
 	char name[30];
 	int activated;
 	int linktype;
+	int snapshot;
 	libtrace_t *trace;
 	libtrace_packet_t *packet;
 };
@@ -277,6 +279,11 @@ void pcap_close(pcap_t *p)
         free(p);
 }
 
+//XXX - stub!
+pcap_t *pcap_open_offline(const char *fname, char *errbuf)
+{
+        return NULL;
+}
 
 //@source - iface name.
 pcap_t *pcap_create(const char *source, char *errbuf)
@@ -291,6 +298,7 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 	handle->activated = 0;
 	handle->packet = NULL;
 	handle->linktype = LINKTYPE_ETHERNET;
+	handle->snapshot = 65536;
 
 	handle->trace = trace_create(source);
 	if (!handle->trace)
@@ -304,6 +312,74 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 	return handle;
 }
 
+//internal function, not in my list
+int pcap_check_activated(pcap_t *p)
+{
+        if (p->activated) 
+	{
+                printf("can't perform operation on activated capture\n");
+                return (-1);
+        }
+        return (0);
+}
+
+int pcap_set_snaplen(pcap_t *p, int snaplen)
+{
+        if (pcap_check_activated(p))
+                return (PCAP_ERROR_ACTIVATED);
+
+        /*
+         * Turn invalid values, or excessively large values, into
+         * the maximum allowed value.
+         *
+         * If some application really *needs* a bigger snapshot
+         * length, we should just increase MAXIMUM_SNAPLEN.
+         */
+        if (snaplen <= 0 || snaplen > MAXIMUM_SNAPLEN)
+                snaplen = MAXIMUM_SNAPLEN;
+        p->snapshot = snaplen;
+        return (0);
+}
+
+//we just have a define in libtrace, but not a function to set buf size,
+//so this is just stub here
+//#define LIBTRACE_PACKET_BUFSIZE   65536
+
+int pcap_set_buffer_size(pcap_t *p, int buffer_size)
+{
+        if (pcap_check_activated(p))
+                return (PCAP_ERROR_ACTIVATED);
+        if (buffer_size <= 0) {
+                /*
+                 * Silently ignore invalid values.
+                 */
+                return (0);
+        }
+	//XXX - don't do actually nothing here
+        //p->opt.buffer_size = buffer_size;
+        return (0);
+}
+
+int pcap_set_promisc(pcap_t *p, int promisc)
+{
+        if (pcap_check_activated(p))
+                return (PCAP_ERROR_ACTIVATED);
+
+	trace_set_promisc(p->trace, (bool)promisc);
+
+        return (0);
+}
+
+//so this is just stub here
+int pcap_set_timeout(pcap_t *p, int timeout_ms)
+{
+        if (pcap_check_activated(p))
+                return (PCAP_ERROR_ACTIVATED);
+	//XXX - don't do actually nothing here
+        //p->opt.timeout = timeout_ms;
+        return (0);
+}
+
 int pcap_activate(pcap_t *p)
 {
 	int rv;
@@ -314,6 +390,12 @@ int pcap_activate(pcap_t *p)
 	return rv;
 }
 
+int pcap_snapshot(pcap_t *p)
+{
+        if (!p->activated)
+                return (PCAP_ERROR_NOT_ACTIVATED);
+        return (p->snapshot);
+}
 
 #if 0
 struct pcap_pkthdr {
