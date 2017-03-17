@@ -22,6 +22,7 @@ struct pcap
 	int activated;
 	int linktype;
 	int snapshot;
+	int fd;
 	libtrace_t *trace;
 	libtrace_packet_t *packet;
 };
@@ -299,6 +300,7 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 	handle->packet = NULL;
 	handle->linktype = LINKTYPE_ETHERNET;
 	handle->snapshot = 65536;
+	handle->fd = 7777;
 
 	handle->trace = trace_create(source);
 	if (!handle->trace)
@@ -397,6 +399,33 @@ int pcap_snapshot(pcap_t *p)
         return (p->snapshot);
 }
 
+int pcap_fileno(pcap_t *p)
+{
+        return (p->fd);
+}
+
+int pcap_setnonblock(pcap_t *p, int nonblock, char *errbuf)
+{
+        int ret;
+
+	ret = nonblock;
+//stub  
+#if 0
+        ret = p->setnonblock_op(p, nonblock, errbuf);
+        if (ret == -1) { 
+                /*
+                 * In case somebody depended on the bug wherein
+                 * the error message was put into p->errbuf
+                 * by pcap_setnonblock_fd().
+                 */
+                strlcpy(p->errbuf, errbuf, PCAP_ERRBUF_SIZE);
+        }           
+#endif
+        return (ret);
+}
+
+
+
 #if 0
 struct pcap_pkthdr {
         struct timeval ts;      /* time stamp */
@@ -404,6 +433,15 @@ struct pcap_pkthdr {
         bpf_u_int32 len;        /* length this packet (off wire) */
 };
 #endif
+
+int pcap_dispatch(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
+{
+
+
+
+
+}
+
 
 //pcap_next() reads the next packet (by calling pcap_dispatch() with a cnt of 1) and returns a u_char pointer to the data in that packet.
 //The bytes of data from the packet begin with a link-layer header
