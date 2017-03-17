@@ -29,10 +29,10 @@ X  12. pcap_set_timeout( descr, 1 )				- sets the read timeout that will be used
 \/14. snaplen = pcap_snapshot( descr )				- returns  the  snapshot  length
 X 15. pcapFd = pcap_fileno( descr )				- returns the file descriptor  from  which  captured packets are read
 X 16. pcap_setnonblock( descr, 0, errbuf )	 (libtrace_t *trace, libtrace_filter_t *filter)		- puts  a  capture  handle into ``non-blocking'' mode
-17. ret = pcap_dispatch( descr, msgCnt , pcap_callback,(Rai_u8 *) this ); - process packets from a live capture or savefile
-# 18. err = pcap_geterr( descr );				- get libpcap error message text	- # trace_get_err()
-19. pcap_inject( descr, buff, len );				- send packet
-20. pcap_breakloop( descr );					- force a pcap_dispatch() or pcap_loop() call to return
+TODO:17. ret = pcap_dispatch( descr, msgCnt , pcap_callback,(Rai_u8 *) this ); - process packets from a live capture or savefile
+\/ 18. err = pcap_geterr( descr );				- get libpcap error message text	- # trace_get_err()
+X 19. pcap_inject( descr, buff, len );				- send packet
+\/ 20. pcap_breakloop( descr );					- force a pcap_dispatch() or pcap_loop() call to return
 
 21. pcap_dump_flush( pcapDumper );					- flushes  the  output  buffer  to  the  ``savefile,
 22. pcap_dump_close( pcapDumper );					- close a savefile being written to

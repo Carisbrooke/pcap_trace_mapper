@@ -436,10 +436,24 @@ struct pcap_pkthdr {
 
 int pcap_dispatch(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 {
+	int i = 0;
+	int rv = 0;
+	int pkts = 0;
+
+	while (i < cnt)
+	{
+		//we return number of bytes read
+		rv = trace_read_packet(p->trace, p->packet);
+		//XXX - call callback for every packet here
+		if (rv > 0)
+			pkts++;
+		else
+			pkts = rv;
+	}
 
 
 
-
+	return pkts;
 }
 
 
@@ -471,3 +485,32 @@ const u_char *pcap_next(pcap_t *p, struct pcap_pkthdr *h)
 	else
 		return NULL;
 }
+
+char *pcap_geterr(pcap_t *p)
+{
+	static libtrace_err_t err;
+
+	err = trace_get_err(p->trace);
+	
+	return err.problem;
+}
+
+//XXX - stub
+int pcap_inject(pcap_t *p, const void *buf, size_t size)
+{
+	int rv = -1;
+	
+	//XXX - no such func in libtrace
+
+
+	return rv;
+}
+
+//Force the loop in "pcap_read()" or "pcap_read_offline()" to terminate.
+void pcap_breakloop(pcap_t *p)
+{
+        //p->break_loop = 1;
+
+	trace_interrupt();
+}
+
