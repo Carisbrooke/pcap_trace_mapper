@@ -33,10 +33,9 @@ TODO:17. ret = pcap_dispatch( descr, msgCnt , pcap_callback,(Rai_u8 *) this ); -
 \/ 18. err = pcap_geterr( descr );				- get libpcap error message text	- # trace_get_err()
 X 19. pcap_inject( descr, buff, len );				- send packet
 \/ 20. pcap_breakloop( descr );					- force a pcap_dispatch() or pcap_loop() call to return
-
-21. pcap_dump_flush( pcapDumper );					- flushes  the  output  buffer  to  the  ``savefile,
-22. pcap_dump_close( pcapDumper );					- close a savefile being written to
-23. pcapDumper = pcap_dump_open( descr, newFileBuf )		- open a file to which to write packets
+\/21. pcap_dump_flush( pcapDumper );					- flushes  the  output  buffer  to  the  ``savefile,
+\/22. pcap_dump_close( pcapDumper );					- close a savefile being written to
+\/23. pcapDumper = pcap_dump_open( descr, newFileBuf )		- open a file to which to write packets
 
 24. pcap_lookupnet(devOpts.device(), &netp, &maskp, errbuf)		- find the IPv4 network number and netmask for a device
 

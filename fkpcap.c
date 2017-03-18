@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <errno.h>
 #include <pcap/pcap.h>
 #include "dlt.h"
 #include <libtrace.h>
@@ -25,6 +28,7 @@ struct pcap
 	int fd;
 	libtrace_t *trace;
 	libtrace_packet_t *packet;
+	libtrace_out_t *trace_out;
 };
 
 #if 0
@@ -42,6 +46,11 @@ struct dlt_choice {
         const char *description;
         int     dlt;
 };
+
+#define strlcpy(x, y, z) \
+        (strncpy((x), (y), (z)), \
+         ((z) <= 0 ? 0 : ((x)[(z) - 1] = '\0')), \
+         strlen((y)))
 
 #define DLT_CHOICE(code, description) { #code, description, DLT_ ## code }
 #define DLT_CHOICE_SENTINEL { NULL, NULL, 0 }
@@ -301,6 +310,7 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 	handle->linktype = LINKTYPE_ETHERNET;
 	handle->snapshot = 65536;
 	handle->fd = 7777;
+	handle->trace_out = NULL;
 
 	handle->trace = trace_create(source);
 	if (!handle->trace)
@@ -514,3 +524,108 @@ void pcap_breakloop(pcap_t *p)
 	trace_interrupt();
 }
 
+int
+pcap_dump_flush(pcap_dumper_t *p)
+{
+
+        if (fflush((FILE *)p) == EOF)
+                return (-1);
+        else
+                return (0);
+}
+
+void pcap_dump_close(pcap_dumper_t *p)
+{
+        (void)fclose((FILE *)p);
+}
+
+//pcap_dump_open, pcap_dump_fopen - open a file to which to write packets
+//pcap:/path/to/pcap/file
+pcap_dumper_t * pcap_dump_open(pcap_t *p, const char *fname)
+{
+	char fulluri[256] = "pcap:";
+	strcat(fulluri, fname);
+	p->trace_out = trace_create_output(fulluri);
+
+	//XXX This generally creates the output file. So if we want to create
+	//valid output - we also have to call:
+	//trace_start_output()
+}
+
+
+int
+pcap_lookupnet(device, netp, maskp, errbuf)
+        register const char *device;
+        register bpf_u_int32 *netp, *maskp;
+        register char *errbuf;
+{
+        register int fd;
+        register struct sockaddr_in *sin4;
+        struct ifreq ifr;
+
+        /*
+         * The pseudo-device "any" listens on all interfaces and therefore
+         * has the network address and -mask "0.0.0.0" therefore catching
+         * all traffic. Using NULL for the interface is the same as "any".
+         */
+        if (!device || strcmp(device, "any") == 0)
+	{
+                *netp = *maskp = 0;
+                return 0;
+        }
+
+        fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd < 0) {
+                (void)snprintf(errbuf, PCAP_ERRBUF_SIZE, "socket fckd up");
+                return (-1);
+        }
+        memset(&ifr, 0, sizeof(ifr));
+
+        ifr.ifr_addr.sa_family = AF_INET;
+
+        (void)strlcpy(ifr.ifr_name, device, sizeof(ifr.ifr_name));
+        if (ioctl(fd, SIOCGIFADDR, (char *)&ifr) < 0) {
+                if (errno == EADDRNOTAVAIL) {
+                        (void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+                            "%s: no IPv4 address assigned", device);
+                } else {
+                        (void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+                            "SIOCGIFADDR: %s: %s",
+                            device, pcap_strerror(errno));
+                }
+                (void)close(fd);
+                return (-1);
+        }
+        sin4 = (struct sockaddr_in *)&ifr.ifr_addr;
+        *netp = sin4->sin_addr.s_addr;
+        memset(&ifr, 0, sizeof(ifr));
+
+        /* XXX Work around Linux kernel bug */
+        ifr.ifr_addr.sa_family = AF_INET;
+
+        (void)strlcpy(ifr.ifr_name, device, sizeof(ifr.ifr_name));
+        if (ioctl(fd, SIOCGIFNETMASK, (char *)&ifr) < 0) {
+                (void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+                    "SIOCGIFNETMASK: %s: %s", device, pcap_strerror(errno));
+                (void)close(fd);
+                return (-1);
+        }
+        (void)close(fd);
+        *maskp = sin4->sin_addr.s_addr;
+        if (*maskp == 0) {
+                if (IN_CLASSA(*netp))
+                        *maskp = IN_CLASSA_NET;
+                else if (IN_CLASSB(*netp))
+                        *maskp = IN_CLASSB_NET;
+                else if (IN_CLASSC(*netp))
+                        *maskp = IN_CLASSC_NET;
+                else {
+                        (void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+                            "inet class for 0x%x unknown", *netp);
+                        return (-1);
+                }
+        }
+        *netp &= *maskp;
+
+        return (0);
+}
