@@ -37,10 +37,10 @@ X 19. pcap_inject( descr, buff, len );				- send packet
 \/22. pcap_dump_close( pcapDumper );					- close a savefile being written to
 \/23. pcapDumper = pcap_dump_open( descr, newFileBuf )		- open a file to which to write packets
 
-24. pcap_lookupnet(devOpts.device(), &netp, &maskp, errbuf)		- find the IPv4 network number and netmask for a device
+\/24. pcap_lookupnet(devOpts.device(), &netp, &maskp, errbuf)		- find the IPv4 network number and netmask for a device
 
-25. pcap_compile( descr, &fp, ( char * ) pcapFilter, 1, maskp ) 	- compile a filter expression
-# 26. pcap_setfilter( descr, &fp)					- set the filter			- # trace_set_filter()
+\/25. pcap_compile( descr, &fp, ( char * ) pcapFilter, 1, maskp ) 	- compile a filter expression
+\/# 26. pcap_setfilter( descr, &fp)					- set the filter			- # trace_set_filter()
 27. pcap_freecode( &fp );						- free  up  allocated  memory by pcap_compile
 
 28. void pcap_callback(Rai_u8 * args, const struct pcap_pkthdr * pkthdr,const Rai_u8 * packet );	- callback for pcap_loop() or pcap_dispatch()

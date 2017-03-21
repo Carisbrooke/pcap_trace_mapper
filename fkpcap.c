@@ -553,8 +553,7 @@ pcap_dumper_t * pcap_dump_open(pcap_t *p, const char *fname)
 }
 
 
-int
-pcap_lookupnet(device, netp, maskp, errbuf)
+int pcap_lookupnet(device, netp, maskp, errbuf)
         register const char *device;
         register bpf_u_int32 *netp, *maskp;
         register char *errbuf;
@@ -629,3 +628,61 @@ pcap_lookupnet(device, netp, maskp, errbuf)
 
         return (0);
 }
+
+//we call 1. pcap_compile() to convert our string into bfp.
+//then we call 2. pcap_setfilter() to set bpf filter
+
+#if 0
+/** Internal representation of a BPF filter */
+struct libtrace_filter_t {
+        struct bpf_program filter;      /**< The BPF program itself */
+        char * filterstring;            /**< The filter string */
+        int flag;                       /**< Indicates if the filter is valid */
+        struct bpf_jit_t *jitfilter;
+};
+#endif
+
+//@fp - OUT, @str - input string to be converted into filter
+int pcap_compile(pcap_t *p, struct bpf_program *fp, const char *str, int optimize, bpf_u_int32 netmask)
+{
+	int rv;
+
+	//libtrace_filter_t * 	trace_create_filter (const char *filterstring)
+	libtrace_filter_t *filter = trace_create_filter(str);
+
+	//XXX - we really return pointer to another type, but in libtrace_filter_t struct
+	//we have bpf_program on first place, so in theory it should work fine
+	fp = (struct bpf_program*)filter;
+
+	if (filter)
+		rv = 0;
+	else
+		rv = -1;
+
+	return rv;		
+
+}
+
+int pcap_setfilter(pcap_t *p, struct bpf_program *fp)
+{
+	int rv;
+
+	libtrace_filter_t *filter = (struct libtrace_filter_t*)fp;
+
+	//int 	trace_apply_filter (libtrace_filter_t *filter, const libtrace_packet_t *packet)
+	rv = trace_apply_filter(filter, p->packet);
+	if (rv > 0)
+		return 0;
+	else
+		return -1;
+}
+
+void pcap_freecode(struct bpf_program *program)
+{
+	//void 	trace_destroy_filter (libtrace_filter_t *filter)
+
+	libtrace_filter_t *filter = (struct libtrace_filter_t*)program;
+
+	trace_destroy_filter(filter);
+}
+
