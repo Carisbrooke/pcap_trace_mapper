@@ -11,13 +11,13 @@
 #define LINKTYPE_ETHERNET 	1
 #define MAXIMUM_SNAPLEN		262144
 
-#if 0
-int pcap_findalldevs(pcap_if_t **alldevsp, char *errbuf)	- just stub
-pcap_freealldevs(pcap_if_t *alldevs)
-pcap_t *pcap_create(const char *source, char *errbuf)
-int pcap_activate(pcap_t *p)
-const u_char *pcap_next(pcap_t *p, struct pcap_pkthdr *h)
-#endif
+#define strlcpy(x, y, z) \
+        (strncpy((x), (y), (z)), \
+         ((z) <= 0 ? 0 : ((x)[(z) - 1] = '\0')), \
+         strlen((y)))
+
+#define DLT_CHOICE(code, description) { #code, description, DLT_ ## code }
+#define DLT_CHOICE_SENTINEL { NULL, NULL, 0 }
 
 struct pcap
 {
@@ -32,6 +32,7 @@ struct pcap
 };
 
 #if 0
+//struct from libpcap:
 struct pcap_if {
         struct pcap_if *next;
         char *name;             /* name to hand to "pcap_open_live()" */
@@ -46,14 +47,6 @@ struct dlt_choice {
         const char *description;
         int     dlt;
 };
-
-#define strlcpy(x, y, z) \
-        (strncpy((x), (y), (z)), \
-         ((z) <= 0 ? 0 : ((x)[(z) - 1] = '\0')), \
-         strlen((y)))
-
-#define DLT_CHOICE(code, description) { #code, description, DLT_ ## code }
-#define DLT_CHOICE_SENTINEL { NULL, NULL, 0 }
 
 static struct dlt_choice dlt_choices[] = {
         DLT_CHOICE(NULL, "BSD loopback"),
@@ -188,9 +181,6 @@ static struct dlt_choice dlt_choices[] = {
         DLT_CHOICE_SENTINEL
 };
 
-
-
-
 //XXX - no such analogue in libtrace
 int pcap_findalldevs(pcap_if_t **alldevsp, char *errbuf)
 {
@@ -289,12 +279,6 @@ void pcap_close(pcap_t *p)
         free(p);
 }
 
-//XXX - stub!
-pcap_t *pcap_open_offline(const char *fname, char *errbuf)
-{
-        return NULL;
-}
-
 //@source - iface name.
 pcap_t *pcap_create(const char *source, char *errbuf)
 {
@@ -309,7 +293,7 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 	handle->packet = NULL;
 	handle->linktype = LINKTYPE_ETHERNET;
 	handle->snapshot = 65536;
-	handle->fd = 7777;
+	handle->fd = 7777;	//XXX
 	handle->trace_out = NULL;
 
 	handle->trace = trace_create(source);
@@ -322,6 +306,13 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 		printf("trace created successfully\n");
 
 	return handle;
+}
+
+// just call the pcap_create() as in libtrace trace_create() 
+// opens both: network interface and offline file for reading.
+pcap_t *pcap_open_offline(const char *fname, char *errbuf)
+{
+	return pcap_create(fname, errbuf);
 }
 
 //internal function, not in my list
