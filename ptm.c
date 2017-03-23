@@ -86,13 +86,16 @@ X 19. pcap_inject( descr, buff, len );				- send packet
 char errbuf[PCAP_ERRBUF_SIZE];	//256 bytes
 int pkts_cnt = 0;
 
-void main()
+void main(int argc, char *argv[])
 {
 	int rv;
 	char *iface = "wlan0";
 	char *dev;
 	struct pcap_pkthdr header;	/* The header that pcap gives us */
 	const u_char *packet;		/* The actual packet */
+
+	if (argc == 2)
+		iface = argv[1];
 
 	//1. looking for first available device
 #if 0

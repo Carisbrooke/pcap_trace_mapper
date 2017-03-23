@@ -389,6 +389,7 @@ int pcap_activate(pcap_t *p)
 
 	p->activated = 1;
 	rv = trace_start(p->trace);
+	printf("%s() rv: %d \n", __func__, rv);
 
 	return rv;
 }
@@ -452,11 +453,8 @@ int pcap_dispatch(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 			pkts = rv;
 	}
 
-
-
 	return pkts;
 }
-
 
 //pcap_next() reads the next packet (by calling pcap_dispatch() with a cnt of 1) and returns a u_char pointer to the data in that packet.
 //The bytes of data from the packet begin with a link-layer header
@@ -676,4 +674,3 @@ void pcap_freecode(struct bpf_program *program)
 
 	trace_destroy_filter(filter);
 }
-
