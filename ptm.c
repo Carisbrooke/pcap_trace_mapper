@@ -118,6 +118,7 @@ void main(int argc, char *argv[])
 	}
 
 	rv = pcap_activate(pcap);
+
 	if (rv)
 	{
 		printf("<error> pcap_activate(): %d. %s\n", rv, errbuf);

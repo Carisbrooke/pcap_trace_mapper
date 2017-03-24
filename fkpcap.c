@@ -296,6 +296,16 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 	handle->fd = 7777;	//XXX
 	handle->trace_out = NULL;
 
+        /* Creating and initialising a packet structure to store the packets
+         * that we're going to read from the trace. We store all packets here
+	 * alloc memory for packet and clear its fields */
+	handle->packet = trace_create_packet();
+	if (!handle->packet)
+	{
+		printf("failed to create packet (storage)\n");
+		return NULL;
+	}
+
 	handle->trace = trace_create(source);
 	if (!handle->trace)
 	{
@@ -389,7 +399,7 @@ int pcap_activate(pcap_t *p)
 
 	p->activated = 1;
 	rv = trace_start(p->trace);
-	printf("%s() rv: %d \n", __func__, rv);
+	fprintf(stderr, "%s() rv: %d \n", __func__, rv);
 
 	return rv;
 }
@@ -462,10 +472,7 @@ const u_char *pcap_next(pcap_t *p, struct pcap_pkthdr *h)
 {
 	int rv;
 
-	//alloc memory for packet and clear its fields
-	p->packet = trace_create_packet();
-	if (!p->packet)
-		return NULL;
+
 
 	//trace_read_packet (libtrace_t *trace, libtrace_packet_t *packet)
 	//will block until a packet is read (or EOF is reached).
