@@ -472,8 +472,6 @@ const u_char *pcap_next(pcap_t *p, struct pcap_pkthdr *h)
 {
 	int rv;
 
-
-
 	//trace_read_packet (libtrace_t *trace, libtrace_packet_t *packet)
 	//will block until a packet is read (or EOF is reached).
 	rv = trace_read_packet(p->trace, p->packet);
@@ -680,4 +678,23 @@ void pcap_freecode(struct bpf_program *program)
 	libtrace_filter_t *filter = (struct libtrace_filter_t*)program;
 
 	trace_destroy_filter(filter);
+}
+
+int pcap_stats(pcap_t *p, struct pcap_stat *ps)
+{
+	int rv = 0;
+
+	libtrace_stat_t *stat;
+
+	stat = trace_get_statistics(p->trace, NULL);
+	if (stat)
+	{
+		ps->ps_recv = (unsigned int)(stat->received);
+		ps->ps_drop = (unsigned int)(stat->dropped);
+		ps->ps_ifdrop = (unsigned int)(stat->filtered); //filtered out
+	}
+	else
+		rv = -1;
+
+	return rv;
 }

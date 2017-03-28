@@ -45,7 +45,12 @@ X 19. pcap_inject( descr, buff, len );				- send packet
 27. pcap_freecode( &fp );						- free  up  allocated  memory by pcap_compile
 
 28. void pcap_callback(Rai_u8 * args, const struct pcap_pkthdr * pkthdr,const Rai_u8 * packet );	- callback for pcap_loop() or pcap_dispatch()
+
+29. pcap_stats
+
 */
+
+
 
 //# pcap_next() - trace_read_packet()
 
@@ -93,6 +98,7 @@ void main(int argc, char *argv[])
 	char *dev;
 	struct pcap_pkthdr header;	/* The header that pcap gives us */
 	const u_char *packet;		/* The actual packet */
+	struct pcap_stat ps;
 
 	if (argc == 2)
 		iface = argv[1];
@@ -131,6 +137,13 @@ void main(int argc, char *argv[])
 		packet = pcap_next(pcap, &header);
 		//TODO: dump of header: macs, eth, tcp/udp, etc
 		if (packet)
+		{
 			printf("Jacked a packet #%d with length of [%d]\n", ++pkts_cnt, header.len);
+			rv = pcap_stats(pcap, &ps);
+			if (!rv)
+			{
+				printf("received: %u, dropped: %u, filtered: %u \n", ps.ps_recv, ps.ps_drop, ps.ps_ifdrop);
+			}
+		}
 	}
 }
