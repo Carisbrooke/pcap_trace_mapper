@@ -8,8 +8,15 @@
 #include "dlt.h"
 #include <libtrace.h>
 
+#define DEBUG
 #define LINKTYPE_ETHERNET 	1
 #define MAXIMUM_SNAPLEN		262144
+
+#ifdef DEBUG
+ #define debug(x...) printf(x)
+#else
+ #define debug(x...)
+#endif
 
 #define strlcpy(x, y, z) \
         (strncpy((x), (y), (z)), \
@@ -184,7 +191,7 @@ static struct dlt_choice dlt_choices[] = {
 //XXX - no such analogue in libtrace
 int pcap_findalldevs(pcap_if_t **alldevsp, char *errbuf)
 {
-
+	debug("[%s() start]\n", __func__);
 
 
 
@@ -198,6 +205,8 @@ int pcap_findalldevs(pcap_if_t **alldevsp, char *errbuf)
 void
 pcap_freealldevs(pcap_if_t *alldevs)
 {
+	debug("[%s() start]\n", __func__);
+
         pcap_if_t *curdev, *nextdev;
         pcap_addr_t *curaddr, *nextaddr;
 
@@ -241,6 +250,8 @@ pcap_freealldevs(pcap_if_t *alldevs)
 //XXX - returns linktype which is always LINKTYPE_ETHERNET
 int pcap_datalink(pcap_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
         if (!p->activated)
                 return (PCAP_ERROR_NOT_ACTIVATED);
         return (p->linktype);
@@ -249,6 +260,8 @@ int pcap_datalink(pcap_t *p)
 const char *
 pcap_datalink_val_to_name(int dlt)
 {
+	debug("[%s() start]\n", __func__);
+
         int i;
 
         for (i = 0; dlt_choices[i].name != NULL; i++) {
@@ -261,6 +274,8 @@ pcap_datalink_val_to_name(int dlt)
 const char *
 pcap_datalink_val_to_description(int dlt)
 {
+	debug("[%s() start]\n", __func__);
+
         int i;
 
         for (i = 0; dlt_choices[i].name != NULL; i++) {
@@ -272,6 +287,8 @@ pcap_datalink_val_to_description(int dlt)
 
 void pcap_close(pcap_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
 	if (p->packet)
 		trace_destroy_packet(p->packet);
 	if (p->trace)
@@ -282,6 +299,8 @@ void pcap_close(pcap_t *p)
 //@source - iface name.
 pcap_t *pcap_create(const char *source, char *errbuf)
 {
+	debug("[%s() start]\n", __func__);
+
 	pcap_t *handle;
 	handle = malloc(sizeof(pcap_t));
 	if (!handle)
@@ -322,12 +341,16 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 // opens both: network interface and offline file for reading.
 pcap_t *pcap_open_offline(const char *fname, char *errbuf)
 {
+	debug("[%s() start]\n", __func__);
+
 	return pcap_create(fname, errbuf);
 }
 
 //internal function, not in my list
 int pcap_check_activated(pcap_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
         if (p->activated) 
 	{
                 printf("can't perform operation on activated capture\n");
@@ -338,6 +361,8 @@ int pcap_check_activated(pcap_t *p)
 
 int pcap_set_snaplen(pcap_t *p, int snaplen)
 {
+	debug("[%s() start]\n", __func__);
+
         if (pcap_check_activated(p))
                 return (PCAP_ERROR_ACTIVATED);
 
@@ -360,6 +385,8 @@ int pcap_set_snaplen(pcap_t *p, int snaplen)
 
 int pcap_set_buffer_size(pcap_t *p, int buffer_size)
 {
+	debug("[%s() start]\n", __func__);
+
         if (pcap_check_activated(p))
                 return (PCAP_ERROR_ACTIVATED);
         if (buffer_size <= 0) {
@@ -375,6 +402,8 @@ int pcap_set_buffer_size(pcap_t *p, int buffer_size)
 
 int pcap_set_promisc(pcap_t *p, int promisc)
 {
+	debug("[%s() start]\n", __func__);
+
         if (pcap_check_activated(p))
                 return (PCAP_ERROR_ACTIVATED);
 
@@ -386,6 +415,8 @@ int pcap_set_promisc(pcap_t *p, int promisc)
 //so this is just stub here
 int pcap_set_timeout(pcap_t *p, int timeout_ms)
 {
+	debug("[%s() start]\n", __func__);
+
         if (pcap_check_activated(p))
                 return (PCAP_ERROR_ACTIVATED);
 	//XXX - don't do actually nothing here
@@ -395,6 +426,8 @@ int pcap_set_timeout(pcap_t *p, int timeout_ms)
 
 int pcap_activate(pcap_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
 	int rv;
 
 	p->activated = 1;
@@ -406,6 +439,8 @@ int pcap_activate(pcap_t *p)
 
 int pcap_snapshot(pcap_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
         if (!p->activated)
                 return (PCAP_ERROR_NOT_ACTIVATED);
         return (p->snapshot);
@@ -413,11 +448,15 @@ int pcap_snapshot(pcap_t *p)
 
 int pcap_fileno(pcap_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
         return (p->fd);
 }
 
 int pcap_setnonblock(pcap_t *p, int nonblock, char *errbuf)
 {
+	debug("[%s() start]\n", __func__);
+
         int ret;
 
 	ret = nonblock;
@@ -448,6 +487,8 @@ struct pcap_pkthdr {
 
 int pcap_dispatch(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 {
+	debug("[%s() start]\n", __func__);
+
 	int i = 0;
 	int rv = 0;
 	int pkts = 0;
@@ -470,6 +511,8 @@ int pcap_dispatch(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 //The bytes of data from the packet begin with a link-layer header
 const u_char *pcap_next(pcap_t *p, struct pcap_pkthdr *h)
 {
+	debug("[%s() start]\n", __func__);
+
 	int rv;
 
 	//trace_read_packet (libtrace_t *trace, libtrace_packet_t *packet)
@@ -492,6 +535,8 @@ const u_char *pcap_next(pcap_t *p, struct pcap_pkthdr *h)
 
 char *pcap_geterr(pcap_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
 	static libtrace_err_t err;
 
 	err = trace_get_err(p->trace);
@@ -502,6 +547,8 @@ char *pcap_geterr(pcap_t *p)
 //XXX - stub
 int pcap_inject(pcap_t *p, const void *buf, size_t size)
 {
+	debug("[%s() start]\n", __func__);
+
 	int rv = -1;
 	
 	//XXX - no such func in libtrace
@@ -513,6 +560,8 @@ int pcap_inject(pcap_t *p, const void *buf, size_t size)
 //Force the loop in "pcap_read()" or "pcap_read_offline()" to terminate.
 void pcap_breakloop(pcap_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
         //p->break_loop = 1;
 
 	trace_interrupt();
@@ -521,6 +570,8 @@ void pcap_breakloop(pcap_t *p)
 int
 pcap_dump_flush(pcap_dumper_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
 
         if (fflush((FILE *)p) == EOF)
                 return (-1);
@@ -530,6 +581,8 @@ pcap_dump_flush(pcap_dumper_t *p)
 
 void pcap_dump_close(pcap_dumper_t *p)
 {
+	debug("[%s() start]\n", __func__);
+
         (void)fclose((FILE *)p);
 }
 
@@ -537,6 +590,8 @@ void pcap_dump_close(pcap_dumper_t *p)
 //pcap:/path/to/pcap/file
 pcap_dumper_t * pcap_dump_open(pcap_t *p, const char *fname)
 {
+	debug("[%s() start]\n", __func__);
+
 	char fulluri[256] = "pcap:";
 	strcat(fulluri, fname);
 	p->trace_out = trace_create_output(fulluri);
@@ -552,6 +607,8 @@ int pcap_lookupnet(device, netp, maskp, errbuf)
         register bpf_u_int32 *netp, *maskp;
         register char *errbuf;
 {
+	debug("[%s() start]\n", __func__);
+
         register int fd;
         register struct sockaddr_in *sin4;
         struct ifreq ifr;
@@ -639,6 +696,8 @@ struct libtrace_filter_t {
 //@fp - OUT, @str - input string to be converted into filter
 int pcap_compile(pcap_t *p, struct bpf_program *fp, const char *str, int optimize, bpf_u_int32 netmask)
 {
+	debug("[%s() start]\n", __func__);
+
 	int rv;
 
 	//libtrace_filter_t * 	trace_create_filter (const char *filterstring)
@@ -659,6 +718,8 @@ int pcap_compile(pcap_t *p, struct bpf_program *fp, const char *str, int optimiz
 
 int pcap_setfilter(pcap_t *p, struct bpf_program *fp)
 {
+	debug("[%s() start]\n", __func__);
+
 	int rv;
 
 	libtrace_filter_t *filter = (struct libtrace_filter_t*)fp;
@@ -673,6 +734,8 @@ int pcap_setfilter(pcap_t *p, struct bpf_program *fp)
 
 void pcap_freecode(struct bpf_program *program)
 {
+	debug("[%s() start]\n", __func__);
+
 	//void 	trace_destroy_filter (libtrace_filter_t *filter)
 
 	libtrace_filter_t *filter = (struct libtrace_filter_t*)program;
@@ -682,6 +745,8 @@ void pcap_freecode(struct bpf_program *program)
 
 int pcap_stats(pcap_t *p, struct pcap_stat *ps)
 {
+	debug("[%s() start]\n", __func__);
+
 	int rv = 0;
 
 	libtrace_stat_t *stat;

@@ -115,6 +115,8 @@ void main(int argc, char *argv[])
 		printf("device for capturing found is: %s\n", dev);	//on my pc its eth0 (probably first one)
 #endif
 
+	pcap_findalldevs(NULL, NULL);
+
 	printf("start capture from iface: %s\n", iface);
 	pcap_t *pcap = pcap_create(iface, errbuf);
 	if (!pcap)
