@@ -99,6 +99,9 @@ void main(int argc, char *argv[])
 	struct pcap_pkthdr header;	/* The header that pcap gives us */
 	const u_char *packet;		/* The actual packet */
 	struct pcap_stat ps;
+	pcap_if_t *interfaces, *temp;
+	char error[PCAP_ERRBUF_SIZE];
+	int i;
 
 	if (argc == 2)
 		iface = argv[1];
@@ -115,7 +118,28 @@ void main(int argc, char *argv[])
 		printf("device for capturing found is: %s\n", dev);	//on my pc its eth0 (probably first one)
 #endif
 
-	pcap_findalldevs(NULL, NULL);
+	//finding ifaces
+	if(pcap_findalldevs(&interfaces,error)==-1)
+	{
+		printf("error in pcap_findalldevs()\n");
+		return;   
+	}
+/*
+example of ifaces list:
+0  :  eth0 
+1  :  wlan0 
+2  :  nflog 
+3  :  nfqueue 
+4  :  eth2 
+5  :  any 
+6  :  lo 
+*/
+	printf("the interfaces present on the system are:\n");
+	for(temp=interfaces,i=0;temp;temp=temp->next)
+	{
+        	printf("%d  :  %s \n",i++,temp->name);
+	}
+
 
 	printf("start capture from iface: %s\n", iface);
 	pcap_t *pcap = pcap_create(iface, errbuf);

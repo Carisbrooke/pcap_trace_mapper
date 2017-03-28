@@ -38,16 +38,6 @@ struct pcap
 	libtrace_out_t *trace_out;
 };
 
-#if 0
-//struct from libpcap:
-struct pcap_if {
-        struct pcap_if *next;
-        char *name;             /* name to hand to "pcap_open_live()" */
-        char *description;      /* textual description of interface, or NULL */
-        struct pcap_addr *addresses;
-        bpf_u_int32 flags;      /* PCAP_IF_ interface flags */
-};
-#endif
 
 struct dlt_choice {
         const char *name;
@@ -188,15 +178,29 @@ static struct dlt_choice dlt_choices[] = {
         DLT_CHOICE_SENTINEL
 };
 
+#if 0
+//struct from libpcap:
+struct pcap_if {
+        struct pcap_if *next;
+        char *name;             /* name to hand to "pcap_open_live()" */
+        char *description;      /* textual description of interface, or NULL */
+        struct pcap_addr *addresses;
+        bpf_u_int32 flags;      /* PCAP_IF_ interface flags */
+};
+#endif
+
 //XXX - no such analogue in libtrace
 int pcap_findalldevs(pcap_if_t **alldevsp, char *errbuf)
 {
 	debug("[%s() start]\n", __func__);
 
+	int rv = 0;
+
+	*alldevsp = NULL;
 
 
 
-	return 0;
+	return rv;
 }
 
 /*
