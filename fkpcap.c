@@ -1,16 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <dirent.h>
 #include <pcap/pcap.h>
 #include "dlt.h"
 #include <libtrace.h>
 
 #define DEBUG
+
 #define LINKTYPE_ETHERNET 	1
 #define MAXIMUM_SNAPLEN		262144
+
+#define PCAP_IF_LOOPBACK        0x00000001      /* interface is loopback */
+#define PCAP_IF_UP              0x00000002      /* interface is up */
+#define PCAP_IF_RUNNING         0x00000004      /* interface is running */
+
+
+#define ISLOOPBACK(name, flags) ((flags) & IFF_LOOPBACK) 
+#define ISUP(flags) ((flags) & IFF_UP)
+#define ISRUNNING(flags) ((flags) & IFF_RUNNING)
+
 
 #ifdef DEBUG
  #define debug(x...) printf(x)
@@ -189,16 +204,479 @@ struct pcap_if {
 };
 #endif
 
-//XXX - no such analogue in libtrace
+
+static u_int get_figure_of_merit(pcap_if_t *dev)
+{
+        const char *cp;
+        u_int n;
+
+        if (strcmp(dev->name, "any") == 0) {
+                /*
+                 * Give the "any" device an artificially high instance
+                 * number, so it shows up after all other non-loopback
+                 * interfaces.
+                 */
+                n = 0x1FFFFFFF; /* 29 all-1 bits */
+        } else {
+                /*
+                 * A number at the end of the device name string is
+                 * assumed to be a unit number.
+                 */
+                cp = dev->name + strlen(dev->name) - 1;
+                while (cp-1 >= dev->name && *(cp-1) >= '0' && *(cp-1) <= '9')
+                        cp--;
+                if (*cp >= '0' && *cp <= '9')
+                        n = atoi(cp);
+                else
+                        n = 0;
+        }
+        if (!(dev->flags & PCAP_IF_RUNNING))
+                n |= 0x80000000;
+        if (!(dev->flags & PCAP_IF_UP))
+                n |= 0x40000000;
+        if (dev->flags & PCAP_IF_LOOPBACK)
+                n |= 0x20000000;
+        return (n);
+}
+
+static int add_linux_if(pcap_if_t **devlistp, const char *ifname, int fd, char *errbuf)
+{
+	const char *p;
+	char name[512];	/* XXX - pick a size */
+	char *q, *saveq;
+	struct ifreq ifrflags;
+
+	/*
+	 * Get the interface name.
+	 */
+	p = ifname;
+	q = &name[0];
+	while (*p != '\0' && isascii(*p) && !isspace(*p)) {
+		if (*p == ':') {
+			/*
+			 * This could be the separator between a
+			 * name and an alias number, or it could be
+			 * the separator between a name with no
+			 * alias number and the next field.
+			 *
+			 * If there's a colon after digits, it
+			 * separates the name and the alias number,
+			 * otherwise it separates the name and the
+			 * next field.
+			 */
+			saveq = q;
+			while (isascii(*p) && isdigit(*p))
+				*q++ = *p++;
+			if (*p != ':') {
+				/*
+				 * That was the next field,
+				 * not the alias number.
+				 */
+				q = saveq;
+			}
+			break;
+		} else
+			*q++ = *p++;
+	}
+	*q = '\0';
+
+	/*
+	 * Get the flags for this interface.
+	 */
+	strlcpy(ifrflags.ifr_name, name, sizeof(ifrflags.ifr_name));
+	if (ioctl(fd, SIOCGIFFLAGS, (char *)&ifrflags) < 0) {
+		if (errno == ENXIO || errno == ENODEV)
+			return (0);	/* device doesn't actually exist - ignore it */
+		(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+		    "SIOCGIFFLAGS: %.*s: %s",
+		    (int)sizeof(ifrflags.ifr_name),
+		    ifrflags.ifr_name,
+		    pcap_strerror(errno));
+		return (-1);
+	}
+
+	/*
+	 * Add an entry for this interface, with no addresses.
+	 */
+	if (pcap_add_if(devlistp, name, ifrflags.ifr_flags, NULL,
+	    errbuf) == -1) {
+		/*
+		 * Failure.
+		 */
+		return (-1);
+	}
+
+	return (0);
+}
+
+static int add_or_find_if(pcap_if_t **curdev_ret, pcap_if_t **alldevs, const char *name,
+    u_int flags, const char *description, char *errbuf)
+{
+	pcap_t *p;
+	pcap_if_t *curdev, *prevdev, *nextdev;
+	u_int this_figure_of_merit, nextdev_figure_of_merit;
+	char open_errbuf[PCAP_ERRBUF_SIZE];
+	int ret;
+
+	/*
+	 * Is there already an entry in the list for this interface?
+	 */
+	for (curdev = *alldevs; curdev != NULL; curdev = curdev->next) {
+		if (strcmp(name, curdev->name) == 0)
+			break;	/* yes, we found it */
+	}
+
+	if (curdev == NULL) {
+		/*
+		 * No, we didn't find it.
+		 *
+		 * Can we open this interface for live capture?
+		 *
+		 * We do this check so that interfaces that are
+		 * supplied by the interface enumeration mechanism
+		 * we're using but that don't support packet capture
+		 * aren't included in the list.  Loopback interfaces
+		 * on Solaris are an example of this; we don't just
+		 * omit loopback interfaces on all platforms because
+		 * you *can* capture on loopback interfaces on some
+		 * OSes.
+		 *
+		 * On OS X, we don't do this check if the device
+		 * name begins with "wlt"; at least some versions
+		 * of OS X offer monitor mode capturing by having
+		 * a separate "monitor mode" device for each wireless
+		 * adapter, rather than by implementing the ioctls
+		 * that {Free,Net,Open,DragonFly}BSD provide.
+		 * Opening that device puts the adapter into monitor
+		 * mode, which, at least for some adapters, causes
+		 * them to deassociate from the network with which
+		 * they're associated.
+		 *
+		 * Instead, we try to open the corresponding "en"
+		 * device (so that we don't end up with, for users
+		 * without sufficient privilege to open capture
+		 * devices, a list of adapters that only includes
+		 * the wlt devices).
+		 */
+		p = pcap_create(name, open_errbuf);
+		if (p == NULL) {
+			/*
+			 * The attempt to create the pcap_t failed;
+			 * that's probably an indication that we're
+			 * out of memory.
+			 *
+			 * Don't bother including this interface,
+			 * but don't treat it as an error.
+			 */
+			*curdev_ret = NULL;
+			return (0);
+		}
+		/* Small snaplen, so we don't try to allocate much memory. */
+		pcap_set_snaplen(p, 68);
+		ret = pcap_activate(p);
+		pcap_close(p);
+		switch (ret) {
+
+		case PCAP_ERROR_NO_SUCH_DEVICE:
+		case PCAP_ERROR_IFACE_NOT_UP:
+			/*
+			 * We expect these two errors - they're the
+			 * reason we try to open the device.
+			 *
+			 * PCAP_ERROR_NO_SUCH_DEVICE typically means
+			 * "there's no such device *known to the
+			 * OS's capture mechanism*", so, even though
+			 * it might be a valid network interface, you
+			 * can't capture on it (e.g., the loopback
+			 * device in Solaris up to Solaris 10, or
+			 * the vmnet devices in OS X with VMware
+			 * Fusion).  We don't include those devices
+			 * in our list of devices, as there's no
+			 * point in doing so - they're not available
+			 * for capture.
+			 *
+			 * PCAP_ERROR_IFACE_NOT_UP means that the
+			 * OS's capture mechanism doesn't work on
+			 * interfaces not marked as up; some capture
+			 * mechanisms *do* support that, so we no
+			 * longer reject those interfaces out of hand,
+			 * but we *do* want to reject them if they
+			 * can't be opened for capture.
+			 */
+			*curdev_ret = NULL;
+			return (0);
+		}
+
+		/*
+		 * Yes, we can open it, or we can't, for some other
+		 * reason.
+		 *
+		 * If we can open it, we want to offer it for
+		 * capture, as you can capture on it.  If we can't,
+		 * we want to offer it for capture, so that, if
+		 * the user tries to capture on it, they'll get
+		 * an error and they'll know why they can't
+		 * capture on it (e.g., insufficient permissions)
+		 * or they'll report it as a problem (and then
+		 * have the error message to provide as information).
+		 *
+		 * Allocate a new entry.
+		 */
+		curdev = malloc(sizeof(pcap_if_t));
+		if (curdev == NULL) {
+			(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+			    "malloc: %s", pcap_strerror(errno));
+			return (-1);
+		}
+
+		/*
+		 * Fill in the entry.
+		 */
+		curdev->next = NULL;
+		curdev->name = strdup(name);
+		if (curdev->name == NULL) {
+			(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+			    "malloc: %s", pcap_strerror(errno));
+			free(curdev);
+			return (-1);
+		}
+		if (description != NULL) {
+			/*
+			 * We have a description for this interface.
+			 */
+			curdev->description = strdup(description);
+			if (curdev->description == NULL) {
+				(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+				    "malloc: %s", pcap_strerror(errno));
+				free(curdev->name);
+				free(curdev);
+				return (-1);
+			}
+		} else {
+			/*
+			 * We don't.
+			 */
+			curdev->description = NULL;
+		}
+		curdev->addresses = NULL;	/* list starts out as empty */
+		curdev->flags = 0;
+		if (ISLOOPBACK(name, flags))
+			curdev->flags |= PCAP_IF_LOOPBACK;
+		if (ISUP(flags))
+			curdev->flags |= PCAP_IF_UP;
+		if (ISRUNNING(flags))
+			curdev->flags |= PCAP_IF_RUNNING;
+
+		/*
+		 * Add it to the list, in the appropriate location.
+		 * First, get the "figure of merit" for this
+		 * interface.
+		 */
+		this_figure_of_merit = get_figure_of_merit(curdev);
+
+		/*
+		 * Now look for the last interface with an figure of merit
+		 * less than or equal to the new interface's figure of
+		 * merit.
+		 *
+		 * We start with "prevdev" being NULL, meaning we're before
+		 * the first element in the list.
+		 */
+		prevdev = NULL;
+		for (;;) {
+			/*
+			 * Get the interface after this one.
+			 */
+			if (prevdev == NULL) {
+				/*
+				 * The next element is the first element.
+				 */
+				nextdev = *alldevs;
+			} else
+				nextdev = prevdev->next;
+
+			/*
+			 * Are we at the end of the list?
+			 */
+			if (nextdev == NULL) {
+				/*
+				 * Yes - we have to put the new entry
+				 * after "prevdev".
+				 */
+				break;
+			}
+
+			/*
+			 * Is the new interface's figure of merit less
+			 * than the next interface's figure of merit,
+			 * meaning that the new interface is better
+			 * than the next interface?
+			 */
+			nextdev_figure_of_merit = get_figure_of_merit(nextdev);
+			if (this_figure_of_merit < nextdev_figure_of_merit) {
+				/*
+				 * Yes - we should put the new entry
+				 * before "nextdev", i.e. after "prevdev".
+				 */
+				break;
+			}
+
+			prevdev = nextdev;
+		}
+
+		/*
+		 * Insert before "nextdev".
+		 */
+		curdev->next = nextdev;
+
+		/*
+		 * Insert after "prevdev" - unless "prevdev" is null,
+		 * in which case this is the first interface.
+		 */
+		if (prevdev == NULL) {
+			/*
+			 * This is the first interface.  Pass back a
+			 * pointer to it, and put "curdev" before
+			 * "nextdev".
+			 */
+			*alldevs = curdev;
+		} else
+			prevdev->next = curdev;
+	}
+
+	*curdev_ret = curdev;
+	return (0);
+}
+
+int pcap_add_if(pcap_if_t **devlist, const char *name, u_int flags,
+    const char *description, char *errbuf)
+{
+        pcap_if_t *curdev;
+
+        return (add_or_find_if(&curdev, devlist, name, flags, description,
+            errbuf));
+}
+
+static int scan_sys_class_net(pcap_if_t **devlistp, char *errbuf)
+{
+	DIR *sys_class_net_d;
+	int fd;
+	struct dirent *ent;
+	char subsystem_path[PATH_MAX+1];
+	struct stat statb;
+	int ret = 1;
+
+	sys_class_net_d = opendir("/sys/class/net");
+	if (sys_class_net_d == NULL) {
+		/*
+		 * Don't fail if it doesn't exist at all.
+		 */
+		if (errno == ENOENT)
+			return (0);
+
+		/*
+		 * Fail if we got some other error.
+		 */
+		(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+		    "Can't open /sys/class/net: %s", pcap_strerror(errno));
+		return (-1);
+	}
+
+	/*
+	 * Create a socket from which to fetch interface information.
+	 */
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (fd < 0) {
+		(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+		    "socket: %s", pcap_strerror(errno));
+		(void)closedir(sys_class_net_d);
+		return (-1);
+	}
+
+	for (;;) {
+		errno = 0;
+		ent = readdir(sys_class_net_d);
+		if (ent == NULL) {
+			/*
+			 * Error or EOF; if errno != 0, it's an error.
+			 */
+			break;
+		}
+
+		/*
+		 * Ignore "." and "..".
+		 */
+		if (strcmp(ent->d_name, ".") == 0 ||
+		    strcmp(ent->d_name, "..") == 0)
+			continue;
+
+		/*
+		 * Ignore plain files; they do not have subdirectories
+		 * and thus have no attributes.
+		 */
+		if (ent->d_type == DT_REG)
+			continue;
+
+		/*
+		 * Is there an "ifindex" file under that name?
+		 * (We don't care whether it's a directory or
+		 * a symlink; older kernels have directories
+		 * for devices, newer kernels have symlinks to
+		 * directories.)
+		 */
+		snprintf(subsystem_path, sizeof subsystem_path,
+		    "/sys/class/net/%s/ifindex", ent->d_name);
+		if (lstat(subsystem_path, &statb) != 0) {
+			/*
+			 * Stat failed.  Either there was an error
+			 * other than ENOENT, and we don't know if
+			 * this is an interface, or it's ENOENT,
+			 * and either some part of "/sys/class/net/{if}"
+			 * disappeared, in which case it probably means
+			 * the interface disappeared, or there's no
+			 * "ifindex" file, which means it's not a
+			 * network interface.
+			 */
+			continue;
+		}
+
+		/*
+		 * Attempt to add the interface.
+		 */
+		if (add_linux_if(devlistp, &ent->d_name[0], fd, errbuf) == -1) {
+			/* Fail. */
+			ret = -1;
+			break;
+		}
+	}
+	if (ret != -1) {
+		/*
+		 * Well, we didn't fail for any other reason; did we
+		 * fail due to an error reading the directory?
+		 */
+		if (errno != 0) {
+			(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+			    "Error reading /sys/class/net: %s",
+			    pcap_strerror(errno));
+			ret = -1;
+		}
+	}
+
+	(void)close(fd);
+	(void)closedir(sys_class_net_d);
+	return (ret);
+}
+
 int pcap_findalldevs(pcap_if_t **alldevsp, char *errbuf)
 {
 	debug("[%s() start]\n", __func__);
 
 	int rv = 0;
 
+	//just in case we would find nothing
 	*alldevsp = NULL;
 
-
+	rv = scan_sys_class_net(alldevsp, errbuf);
 
 	return rv;
 }
