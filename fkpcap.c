@@ -242,7 +242,7 @@ static u_int get_figure_of_merit(pcap_if_t *dev)
 static int add_linux_if(pcap_if_t **devlistp, const char *ifname, int fd, char *errbuf)
 {
 	const char *p;
-	char name[512];	/* XXX - pick a size */
+	char name[512];
 	char *q, *saveq;
 	struct ifreq ifrflags;
 
@@ -794,7 +794,7 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 	handle->packet = NULL;
 	handle->linktype = LINKTYPE_ETHERNET;
 	handle->snapshot = 65536;
-	handle->fd = 7777;	//XXX
+	handle->fd = -1;	//not opened yet
 	handle->trace_out = NULL;
 
         /* Creating and initialising a packet structure to store the packets
