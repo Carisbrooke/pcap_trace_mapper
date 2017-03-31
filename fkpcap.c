@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <ifaddrs.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <dirent.h>
@@ -25,6 +26,8 @@
 #define ISLOOPBACK(name, flags) ((flags) & IFF_LOOPBACK) 
 #define ISUP(flags) ((flags) & IFF_UP)
 #define ISRUNNING(flags) ((flags) & IFF_RUNNING)
+
+#define SA_LEN(addr)    (sizeof (struct sockaddr))
 
 
 #ifdef DEBUG
@@ -667,14 +670,326 @@ static int scan_sys_class_net(pcap_if_t **devlistp, char *errbuf)
 	return (ret);
 }
 
+int add_addr_to_iflist(pcap_if_t **alldevs, const char *name, u_int flags,
+    struct sockaddr *addr, size_t addr_size,
+    struct sockaddr *netmask, size_t netmask_size,
+    struct sockaddr *broadaddr, size_t broadaddr_size,
+    struct sockaddr *dstaddr, size_t dstaddr_size,
+    char *errbuf)
+{
+	char *description;
+	pcap_if_t *curdev;
+
+	//XXX - don't add description yet. if need - add this func from inet.c (libpcap)
+	//description = get_if_description(name);
+	description = NULL;
+	if (add_or_find_if(&curdev, alldevs, name, flags, description,
+	    errbuf) == -1) {
+		if (description)
+			free(description);
+		/*
+		 * Error - give up.
+		 */
+		return (-1);
+	}
+	free(description);
+	if (curdev == NULL) {
+		/*
+		 * Device wasn't added because it can't be opened.
+		 * Not a fatal error.
+		 */
+		return (0);
+	}
+
+	if (addr == NULL) {
+		/*
+		 * There's no address to add; this entry just meant
+		 * "here's a new interface".
+		 */
+		return (0);
+	}
+
+	/*
+	 * "curdev" is an entry for this interface, and we have an
+	 * address for it; add an entry for that address to the
+	 * interface's list of addresses.
+	 *
+	 * Allocate the new entry and fill it in.
+	 */
+	return (add_addr_to_dev(curdev, addr, addr_size, netmask,
+	    netmask_size, broadaddr, broadaddr_size, dstaddr,
+	    dstaddr_size, errbuf));
+}
+
+struct sockaddr * dup_sockaddr(struct sockaddr *sa, size_t sa_length)
+{
+        struct sockaddr *newsa;
+
+        if ((newsa = malloc(sa_length)) == NULL)
+                return (NULL);
+        return (memcpy(newsa, sa, sa_length));
+}
+
+
+int add_addr_to_dev(pcap_if_t *curdev,
+    struct sockaddr *addr, size_t addr_size,
+    struct sockaddr *netmask, size_t netmask_size,
+    struct sockaddr *broadaddr, size_t broadaddr_size,
+    struct sockaddr *dstaddr, size_t dstaddr_size,
+    char *errbuf)
+{
+	pcap_addr_t *curaddr, *prevaddr, *nextaddr;
+
+	curaddr = malloc(sizeof(pcap_addr_t));
+	if (curaddr == NULL) {
+		(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+		    "malloc: %s", pcap_strerror(errno));
+		return (-1);
+	}
+
+	curaddr->next = NULL;
+	if (addr != NULL) {
+		curaddr->addr = dup_sockaddr(addr, addr_size);
+		if (curaddr->addr == NULL) {
+			(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+			    "malloc: %s", pcap_strerror(errno));
+			free(curaddr);
+			return (-1);
+		}
+	} else
+		curaddr->addr = NULL;
+
+	if (netmask != NULL) {
+		curaddr->netmask = dup_sockaddr(netmask, netmask_size);
+		if (curaddr->netmask == NULL) {
+			(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+			    "malloc: %s", pcap_strerror(errno));
+			if (curaddr->addr != NULL)
+				free(curaddr->addr);
+			free(curaddr);
+			return (-1);
+		}
+	} else
+		curaddr->netmask = NULL;
+
+	if (broadaddr != NULL) {
+		curaddr->broadaddr = dup_sockaddr(broadaddr, broadaddr_size);
+		if (curaddr->broadaddr == NULL) {
+			(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+			    "malloc: %s", pcap_strerror(errno));
+			if (curaddr->netmask != NULL)
+				free(curaddr->netmask);
+			if (curaddr->addr != NULL)
+				free(curaddr->addr);
+			free(curaddr);
+			return (-1);
+		}
+	} else
+		curaddr->broadaddr = NULL;
+
+	if (dstaddr != NULL) {
+		curaddr->dstaddr = dup_sockaddr(dstaddr, dstaddr_size);
+		if (curaddr->dstaddr == NULL) {
+			(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+			    "malloc: %s", pcap_strerror(errno));
+			if (curaddr->broadaddr != NULL)
+				free(curaddr->broadaddr);
+			if (curaddr->netmask != NULL)
+				free(curaddr->netmask);
+			if (curaddr->addr != NULL)
+				free(curaddr->addr);
+			free(curaddr);
+			return (-1);
+		}
+	} else
+		curaddr->dstaddr = NULL;
+
+	/*
+	 * Find the end of the list of addresses.
+	 */
+	for (prevaddr = curdev->addresses; prevaddr != NULL; prevaddr = nextaddr) {
+		nextaddr = prevaddr->next;
+		if (nextaddr == NULL) {
+			/*
+			 * This is the end of the list.
+			 */
+			break;
+		}
+	}
+
+	if (prevaddr == NULL) {
+		/*
+		 * The list was empty; this is the first member.
+		 */
+		curdev->addresses = curaddr;
+	} else {
+		/*
+		 * "prevaddr" is the last member of the list; append
+		 * this member to it.
+		 */
+		prevaddr->next = curaddr;
+	}
+
+	return (0);
+}
+
+
+
+/*
+ * Get a list of all interfaces that are up and that we can open.
+ * Returns -1 on error, 0 otherwise.
+ * The list, as returned through "alldevsp", may be null if no interfaces
+ * could be opened.
+ */
+int pcap_findalldevs_interfaces(pcap_if_t **alldevsp, char *errbuf)
+{
+	pcap_if_t *devlist = NULL;
+	struct ifaddrs *ifap, *ifa;
+	struct sockaddr *addr, *netmask, *broadaddr, *dstaddr;
+	size_t addr_size, broadaddr_size, dstaddr_size;
+	int ret = 0;
+	char *p, *q;
+
+	/*
+	 * Get the list of interface addresses.
+	 *
+	 * Note: this won't return information about interfaces
+	 * with no addresses, so, if a platform has interfaces
+	 * with no interfaces on which traffic can be captured,
+	 * we must check for those interfaces as well (see, for
+	 * example, what's done on Linux).
+	 *
+	 * LAN interfaces will probably have link-layer
+	 * addresses; I don't know whether all implementations
+	 * of "getifaddrs()" now, or in the future, will return
+	 * those.
+	 */
+	if (getifaddrs(&ifap) != 0) {
+		(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
+		    "getifaddrs: %s", pcap_strerror(errno));
+		return (-1);
+	}
+	for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+		/*
+		 * "ifa_addr" was apparently null on at least one
+		 * interface on some system.  Therefore, we supply
+		 * the address and netmask only if "ifa_addr" is
+		 * non-null (if there's no address, there's obviously
+		 * no netmask).
+		 */
+		if (ifa->ifa_addr != NULL) {
+			addr = ifa->ifa_addr;
+			addr_size = SA_LEN(addr);
+			netmask = ifa->ifa_netmask;
+		} else {
+			addr = NULL;
+			addr_size = 0;
+			netmask = NULL;
+		}
+
+		/*
+		 * Note that, on some platforms, ifa_broadaddr and
+		 * ifa_dstaddr could be the same field (true on at
+		 * least some versions of *BSD and OS X), so we
+		 * can't just check whether the broadcast address
+		 * is null and add it if so and check whether the
+		 * destination address is null and add it if so.
+		 *
+		 * Therefore, we must also check the IFF_BROADCAST
+		 * flag, and only add a broadcast address if it's
+		 * set, and check the IFF_POINTTOPOINT flag, and
+		 * only add a destination address if it's set (as
+		 * per man page recommendations on some of those
+		 * platforms).
+		 */
+		if (ifa->ifa_flags & IFF_BROADCAST &&
+		    ifa->ifa_broadaddr != NULL) {
+			broadaddr = ifa->ifa_broadaddr;
+			broadaddr_size = SA_LEN(broadaddr);
+		} else {
+			broadaddr = NULL;
+			broadaddr_size = 0;
+		}
+		if (ifa->ifa_flags & IFF_POINTOPOINT &&
+		    ifa->ifa_dstaddr != NULL) {
+			dstaddr = ifa->ifa_dstaddr;
+			dstaddr_size = SA_LEN(ifa->ifa_dstaddr);
+		} else {
+			dstaddr = NULL;
+			dstaddr_size = 0;
+		}
+
+		/*
+		 * If this entry has a colon followed by a number at
+		 * the end, we assume it's a logical interface.  Those
+		 * are just the way you assign multiple IP addresses to
+		 * a real interface on Linux, so an entry for a logical
+		 * interface should be treated like the entry for the
+		 * real interface; we do that by stripping off the ":"
+		 * and the number.
+		 *
+		 * XXX - should we do this only on Linux?
+		 */
+		p = strchr(ifa->ifa_name, ':');
+		if (p != NULL) {
+			/*
+			 * We have a ":"; is it followed by a number?
+			 */
+			q = p + 1;
+			while (isdigit((unsigned char)*q))
+				q++;
+			if (*q == '\0') {
+				/*
+				 * All digits after the ":" until the end.
+				 * Strip off the ":" and everything after
+				 * it.
+				 */
+			       *p = '\0';
+			}
+		}
+
+		/*
+		 * Add information for this address to the list.
+		 */
+		if (add_addr_to_iflist(&devlist, ifa->ifa_name,
+		    ifa->ifa_flags, addr, addr_size, netmask, addr_size,
+		    broadaddr, broadaddr_size, dstaddr, dstaddr_size,
+		    errbuf) < 0) {
+			ret = -1;
+			break;
+		}
+	}
+
+	freeifaddrs(ifap);
+
+	if (ret == -1) {
+		/*
+		 * We had an error; free the list we've been constructing.
+		 */
+		if (devlist != NULL) {
+			pcap_freealldevs(devlist);
+			devlist = NULL;
+		}
+	}
+
+	*alldevsp = devlist;
+	return (ret);
+}
+
 int pcap_findalldevs(pcap_if_t **alldevsp, char *errbuf)
 {
 	debug("[%s() start]\n", __func__);
 
 	int rv = 0;
 
-	//just in case we would find nothing
+	//just in case we would find nothing. this is also success so return 0
 	*alldevsp = NULL;
+
+        rv = pcap_findalldevs_interfaces(alldevsp, errbuf);
+	{
+		if (rv == -1)
+			return rv;
+	}
 
 	rv = scan_sys_class_net(alldevsp, errbuf);
 
@@ -794,7 +1109,7 @@ pcap_t *pcap_create(const char *source, char *errbuf)
 	handle->packet = NULL;
 	handle->linktype = LINKTYPE_ETHERNET;
 	handle->snapshot = 65536;
-	handle->fd = -1;	//not opened yet
+	handle->fd = -1;	//not opened yet, it should be set with socket() or open() call
 	handle->trace_out = NULL;
 
         /* Creating and initialising a packet structure to store the packets

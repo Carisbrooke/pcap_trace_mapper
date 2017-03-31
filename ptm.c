@@ -3,6 +3,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/socket.h>
+#include <net/if.h>
+#include <arpa/inet.h>
 #include <pcap/pcap.h>
 
 //NEEDED PCAP CALLS (28 funcs from like 69) (libtrace_t *trace, libtrace_filter_t *filter)
@@ -118,12 +121,6 @@ void main(int argc, char *argv[])
 		printf("device for capturing found is: %s\n", dev);	//on my pc its eth0 (probably first one)
 #endif
 
-	//finding ifaces
-	if(pcap_findalldevs(&interfaces,error)==-1)
-	{
-		printf("error in pcap_findalldevs()\n");
-		return;   
-	}
 /*
 example of ifaces list:
 0  :  eth0 
@@ -134,12 +131,29 @@ example of ifaces list:
 5  :  any 
 6  :  lo 
 */
-	printf("the interfaces present on the system are:\n");
-	for(temp=interfaces,i=0;temp;temp=temp->next)
+	//finding ifaces
+	if(pcap_findalldevs(&interfaces, error) == -1)
 	{
-        	printf("%d  :  %s \n",i++,temp->name);
+		printf("error in pcap_findalldevs()\n");
+		return;   
 	}
 
+	printf("the interfaces on the system are:\n");
+	for(temp = interfaces, i = 0; temp; temp = temp->next)
+	{
+		pcap_addr_t *dev_addr; //interface address that used by pcap_findalldevs()
+        	printf("%d  :  %s , %p \n", i++, temp->name, temp->addresses);
+		for (dev_addr = temp->addresses; dev_addr != NULL; dev_addr = dev_addr->next) 
+		{
+        		if (dev_addr->addr && dev_addr->netmask && dev_addr->addr->sa_family == AF_INET) 
+			{
+            			printf("Found a device [%s] on address %s with netmask %s\n", temp->name,
+					inet_ntoa(((struct sockaddr_in *)(dev_addr->addr))->sin_addr),
+					inet_ntoa(((struct sockaddr_in *)(dev_addr->netmask))->sin_addr));
+            			break;
+        		}
+    		}
+	}
 
 	printf("start capture from iface: %s\n", iface);
 	pcap_t *pcap = pcap_create(iface, errbuf);
