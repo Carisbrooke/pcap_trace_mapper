@@ -53,6 +53,14 @@ X 19. pcap_inject( descr, buff, len );				- send packet
 
 */
 
+/* CALLS MISSED IN OUR LIB AND NEEDED BY LIBTRACE:
+pcap_dump
+pcap_next_ex
+pcap_open_dead
+pcap_open_live
+pcap_perror
+pcap_set_immediate_mode
+*/
 
 
 //# pcap_next() - trace_read_packet()
@@ -98,12 +106,16 @@ void main(int argc, char *argv[])
 {
 	int rv;
 	char *iface = "wlan0";
-	char *dev;
 	struct pcap_pkthdr header;	/* The header that pcap gives us */
 	const u_char *packet;		/* The actual packet */
 	struct pcap_stat ps;
 	pcap_if_t *interfaces, *temp;
 	char error[PCAP_ERRBUF_SIZE];
+	//filter
+	bpf_u_int32 mask;		/* The netmask of our sniffing device */
+	bpf_u_int32 net;		/* The IP of our sniffing device */
+	struct bpf_program fp;		/* The compiled filter expression */
+	char filter_exp[] = "port 23";	/* The filter expression */
 	int i;
 
 	if (argc == 2)
@@ -169,6 +181,22 @@ example of ifaces list:
 	{
 		printf("<error> pcap_activate(): %d. %s\n", rv, errbuf);
 		exit(1);
+	}
+
+	if (pcap_lookupnet(iface, &net, &mask, errbuf) == -1) {
+		fprintf(stderr, "Can't get netmask for device %s\n", iface);
+		net = 0;
+		mask = 0;
+	}
+
+	//setting filter
+	if (pcap_compile(pcap, &fp, filter_exp, 0, net) == -1) {
+		fprintf(stderr, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(pcap));
+		return;
+	}
+	if (pcap_setfilter(pcap, &fp) == -1) {
+		fprintf(stderr, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(pcap));
+		return;
 	}
 
 	while (1)

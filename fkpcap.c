@@ -54,8 +54,8 @@ struct pcap
 	libtrace_t *trace;
 	libtrace_packet_t *packet;
 	libtrace_out_t *trace_out;
+	libtrace_filter_t *filter;	//trying to keep one filter inside (just for test)
 };
-
 
 struct dlt_choice {
         const char *name;
@@ -1324,10 +1324,43 @@ const u_char *pcap_next(pcap_t *p, struct pcap_pkthdr *h)
 		h->len = trace_get_capture_length(p->packet);
 	}
 
-	if (rv)
+	//------------ Applying filter for every packet ----------
+        /* Apply the filter to the packet */
+	if (p->filter)
+	{
+		debug(" %s() applying filter\n", __func__);
+        	rv = trace_apply_filter(p->filter, p->packet);
+		debug(" %s() after applying filter\n", __func__);
+	}
+
+        /* Check for any errors that occur during the filtering process */
+        if (rv == -1) {
+                fprintf(stderr, "Error applying filter\n");
+                return NULL;
+        }
+
+        /* If we get a return value of zero, the packet did not match the
+         * filter so we want to return immediately
+         */
+        if (rv == 0)
+	{
+		debug(" %s() packet didn't match\n", __func__);
+                return NULL;
+	}
+
+	if (rv > 0)
+	{
+		/* Otherwise, the packet matched our filter so we should write it to
+         	* our output trace */
+//XXX - uncomment to try to store packets into output trace
+/*
+        	if (trace_write_packet(output, packet) == -1) {
+                	trace_perror_output(output, "Writing packet");
+                return -1;
+        }
+*/
 		return (u_char*)p->packet;
-	else
-		return NULL;
+	}
 }
 
 char *pcap_geterr(pcap_t *p)
@@ -1499,6 +1532,7 @@ int pcap_compile(pcap_t *p, struct bpf_program *fp, const char *str, int optimiz
 
 	//libtrace_filter_t * 	trace_create_filter (const char *filterstring)
 	libtrace_filter_t *filter = trace_create_filter(str);
+	p->filter = filter;
 
 	//XXX - we really return pointer to another type, but in libtrace_filter_t struct
 	//we have bpf_program on first place, so in theory it should work fine
@@ -1517,16 +1551,20 @@ int pcap_setfilter(pcap_t *p, struct bpf_program *fp)
 {
 	debug("[%s() start]\n", __func__);
 
-	int rv;
+	int rv = 0;
 
 	libtrace_filter_t *filter = (struct libtrace_filter_t*)fp;
 
-	//int 	trace_apply_filter (libtrace_filter_t *filter, const libtrace_packet_t *packet)
+//XXX: in pcap we set filter once globally, in libtrace we have to trace_apply_filter() every time on packet!
+#if 0
+	//packet->trace->format->get_link_type
+	if (p->packet)
+		printf("packet: %p, trace: %p, \n", p->packet, p->packet->trace);
+
 	rv = trace_apply_filter(filter, p->packet);
-	if (rv > 0)
-		return 0;
-	else
-		return -1;
+#endif
+
+	return rv;
 }
 
 void pcap_freecode(struct bpf_program *program)
