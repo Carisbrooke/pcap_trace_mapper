@@ -29,7 +29,6 @@
 
 #define SA_LEN(addr)    (sizeof (struct sockaddr))
 
-
 #ifdef DEBUG
  #define debug(x...) printf(x)
 #else

@@ -3,4 +3,5 @@
 ptm
 Session.vim
 *.so
+libpcap.so.1
 core

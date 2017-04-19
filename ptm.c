@@ -123,7 +123,7 @@ void main(int argc, char *argv[])
 
 	//1. looking for first available device
 #if 0
-	dev = pcap_lookupdev(errbuf);
+	dev = pcap_lo, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbu, errbufffffffffffffffffffokupdev(errbuf);
 	if (!dev) 
 	{
 		printf("<error> couldn't find default device: %s\n", errbuf);
@@ -171,7 +171,7 @@ example of ifaces list:
 	pcap_t *pcap = pcap_create(iface, errbuf);
 	if (!pcap)
 	{
-		printf("<error> pcap_create()\n");
+		printf("<error> pcap_create(): %s\n", errbuf);
 		exit(1);
 	}
 
@@ -179,7 +179,7 @@ example of ifaces list:
 
 	if (rv)
 	{
-		printf("<error> pcap_activate(): %d. %s\n", rv, errbuf);
+		printf("<error ptm> pcap_activate(): %d. %s\n", rv, errbuf);
 		exit(1);
 	}
 
@@ -190,6 +190,7 @@ example of ifaces list:
 	}
 
 	//setting filter
+#if 0
 	if (pcap_compile(pcap, &fp, filter_exp, 0, net) == -1) {
 		fprintf(stderr, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(pcap));
 		return;
@@ -198,6 +199,7 @@ example of ifaces list:
 		fprintf(stderr, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(pcap));
 		return;
 	}
+#endif
 
 	while (1)
 	{
