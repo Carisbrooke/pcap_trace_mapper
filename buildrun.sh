@@ -1,6 +1,6 @@
 #!/bin/bash
 
-IFACE=""
+IFACE="enp3s0"
 
 if [ $# -eq 1 ]; then
 	IFACE=$1
