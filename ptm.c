@@ -184,7 +184,7 @@ example of ifaces list:
 	}
 
 	if (pcap_lookupnet(iface, &net, &mask, errbuf) == -1) {
-		fprintf(stderr, "Can't get netmask for device %s\n", iface);
+		fprintf(stderr, "<error ptm> Can't get netmask for device %s\n", iface);
 		net = 0;
 		mask = 0;
 	}
