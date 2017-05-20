@@ -112,10 +112,10 @@ void main(int argc, char *argv[])
 	pcap_if_t *interfaces, *temp;
 	char error[PCAP_ERRBUF_SIZE];
 	//filter
-	bpf_u_int32 mask;		/* The netmask of our sniffing device */
-	bpf_u_int32 net;		/* The IP of our sniffing device */
-	struct bpf_program fp;		/* The compiled filter expression */
-	char filter_exp[] = "port 23";	/* The filter expression */
+	bpf_u_int32 mask;				/* The netmask of our sniffing device */
+	bpf_u_int32 net;				/* The IP of our sniffing device */
+	struct bpf_program fp;				/* The compiled filter expression */
+	char filter_exp[] = "src host 192.168.0.1";	/* The filter expression */
 	int i;
 
 	if (argc == 2)
@@ -190,7 +190,7 @@ example of ifaces list:
 	}
 
 	//setting filter
-#if 0
+#if 1
 	if (pcap_compile(pcap, &fp, filter_exp, 0, net) == -1) {
 		fprintf(stderr, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(pcap));
 		return;
@@ -209,11 +209,11 @@ example of ifaces list:
 		if (packet)
 		{
 			printf("Jacked a packet #%d with length of [%d]\n", ++pkts_cnt, header.len);
-			rv = pcap_stats(pcap, &ps);
 			if (!rv)
 			{
 				printf("received: %u, dropped: %u, filtered: %u \n", ps.ps_recv, ps.ps_drop, ps.ps_ifdrop);
 			}
 		}
+		rv = pcap_stats(pcap, &ps);
 	}
 }
